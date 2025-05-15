@@ -1,0 +1,13 @@
+[project]
+name = "stably-mcp"
+version = "0.1.0"
+description = "Stably end‑to‑end test MCP server"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "fastmcp[cli]>=2.3.0",   
+    "aiohttp>=3.11.0",
+    "ngrok>=1.4.0",
+    "python-dotenv>=1.0.1",
+]

@@ -1,0 +1,4 @@
+fastmcp[cli]>=2.3.0
+aiohttp>=3.11.0
+ngrok>=1.4.0
+python-dotenv>=1.0.1 

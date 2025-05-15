@@ -23,8 +23,6 @@ This MCP server enables clients like Cursor to create end-to-end tests using Sta
         "/path/StablyMCP/main.py"
       ],
       "env": {
-        "API_BASE_URL": "https://app.stably.ai/api/trpc", 
-        "AUTH_BASE_URL": "https://65218409992.propelauthtest.com",
         "AUTH_EMAIL": "your-account@example.com",
         "AUTH_PASSWORD": "XXXXXXXXXXXX",
       }

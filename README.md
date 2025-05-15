@@ -30,7 +30,6 @@ This MCP server enables clients like Cursor to create end-to-end tests using Sta
   }
 }
 ```
-Note: if you want to run it on production, simply remove API_BASE_URL and AUTH_BASE_URL.
 
 ### How does it work?
 

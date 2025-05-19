@@ -1,13 +1,13 @@
 import aiohttp
 from pydantic import BaseModel
 from urllib.parse import urlparse
-from typing import List
+from typing import List, Optional
 import json
 from urllib.parse import urlencode
 import logging
 import os
 from enum import Enum
-
+import asyncio
 # Configure logging
 log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
 os.makedirs(log_dir, exist_ok=True)
@@ -111,12 +111,40 @@ class StablyAPI:
             return True
         new_index = len(existing_knowledge)
         logger.info(f"Creating knowledge item with index {new_index}")
-        await self.__call_trpc_mutation("knowledge.create", {
+        await self.__call_trpc_mutation("knowledge.createManualKnowledge", {
             "projectId": project_id,
             "content": knowledge_item,
             "order": new_index,
         })
         return True
+
+    async def _delete_knowledge(self, knowledge_id: str) -> bool:
+        project_id = await self.get_or_set_project_id()
+        await self.__call_trpc_mutation("knowledge.deleteKnowledgeItem", {
+            "knowledgeItemId": knowledge_id,
+            "projectId": project_id,
+        })
+        return True
+    
+    async def _update_knowledge(self, knowledge_id: str, new_knowledge: str) -> bool:
+        project_id = await self.get_or_set_project_id()
+        await self.__call_trpc_mutation("knowledge.updateManualKnowledge", {
+            "knowledgeItemId": knowledge_id,
+            "projectId": project_id,
+            "content": new_knowledge,
+        })
+        return True
+    
+    async def _query_knowledge(self, query: str, top_k: Optional[int] = None) -> str:
+        project_id = await self.get_or_set_project_id()
+        params = {
+            "query": query,
+            "projectId": project_id
+        }
+        if top_k:
+            params["topK"] = top_k
+        response = await self.__call_trpc_mutation("knowledge.query", params)
+        return response[0]['result']['data']['json']
     
     async def _create_test_draft(self, url: str) -> CreateTestDraftResponse:
         project_id = await self.get_or_set_project_id()
@@ -191,27 +219,46 @@ class StablyAPI:
         })
         return True
 
-    async def set_testing_account_knowledge(self, testing_account_information: str) -> str:
-        testing_account_knowledge = f"User provided some information about the testing account, which could be used for login: {testing_account_information}"
-        return await self._set_knowledge(testing_account_knowledge, KnowledgeType.PREFERENCE, ["CursorMCP"])
+    async def set_testing_account_knowledge(self, testing_account_information: str, testing_url: Optional[str] = None) -> str:
+        url_info = f" for the following url: {testing_url}" if testing_url else ""
+        testing_account_knowledge = f"User provided testing account information{url_info}, which could be used for login: {testing_account_information}"
+        return await self._set_knowledge([testing_account_knowledge], KnowledgeType.PREFERENCE, ["CursorMCP"])
     
     async def set_testing_url_knowledge(self, testing_url: str, may_need_a_testing_account: bool) -> str:
         testing_url_knowledge = f"User provided a testing url: {testing_url}, testing this url {'does not' if not may_need_a_testing_account else ''} require a testing account"
-        return await self._set_knowledge(testing_url_knowledge, KnowledgeType.PREFERENCE, ["CursorMCP"])
+        return await self._set_knowledge([testing_url_knowledge], KnowledgeType.PREFERENCE, ["CursorMCP"])
     
-    async def retrieve_testing_account_knowledge(self) -> List:
-        testing_account_knowledge = await self._list_knowledge()
-        return sorted([item for item in testing_account_knowledge if item['knowledge_content'].startswith('[test_account]')], key=lambda x: x['updated_at'])
+    async def retrieve_testing_account_knowledge(self, testing_url: Optional[str] = None) -> List:
+        query = "Recall any information about the testing account"
+        if testing_url:
+            query += f" for the following url: {testing_url}"
+        testing_account_knowledge = await self._query_knowledge(query, 1)
+        return sorted(testing_account_knowledge, key=lambda x: x['updated_at'])
     
     async def retrieve_testing_url_knowledge(self) -> List:
-        testing_url_knowledge = await self._list_knowledge()
-        return sorted([item for item in testing_url_knowledge if item['knowledge_content'].startswith('[testing_url]')], key=lambda x: x['updated_at'])
+        query = "Recall any information about the testing url"
+        testing_url_knowledge = await self._query_knowledge(query, 3)
+        return sorted(testing_url_knowledge, key=lambda x: x['updated_at'])
     
-    async def _set_knowledge(self, knowledge_item: str, type: KnowledgeType, hashtag: List[str]) -> str:
-        knowledge = f"[{type.value}] {knowledge_item}"
-        if hashtag:
-            knowledge += f" #{'#'.join(hashtag)}"
-        return await self._create_knowledge(knowledge)
+    async def _set_knowledge(self, knowledge_contents: List[str], type: KnowledgeType, hashtag: List[str]) -> str:
+        knowledge_items = []
+        for each in knowledge_contents:
+            knowledge_item = f"[{type.value}] {each}"
+            if hashtag:
+                knowledge_item += f" #{'#'.join(hashtag)}"
+            knowledge_items.append(knowledge_item)
+        knowledge = '\n'.join(knowledge_items)
+        duplicate_query = f"Retrieve all knowledge items that are duplicates to the following knowledge: {knowledge}"
+        conflict_query = f"Retrieve all knowledge items that are conflicting with the following knowledge: {knowledge}"
+
+        duplicate_knowledge, conflict_knowledge = await asyncio.gather(
+            self._query_knowledge(duplicate_query),
+            self._query_knowledge(conflict_query)
+        )
+        delete_tasks = [self._delete_knowledge(each['id']) for each in conflict_knowledge + duplicate_knowledge]
+        create_tasks = [self._create_knowledge(each) for each in knowledge_items]
+        await asyncio.gather(*delete_tasks, *create_tasks)
+        return True
     
     async def set_uncommon_ux_designs(self, list_of_uncommon_ux_designs: List[str]) -> str:
         return await self._set_knowledge(list_of_uncommon_ux_designs, KnowledgeType.GOTCHA, ["CursorMCP"])

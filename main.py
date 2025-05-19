@@ -92,7 +92,10 @@ async def set_testing_url(ctx: Context, user_provided_url: str, may_need_a_testi
 async def set_testing_account(ctx: Context, testing_account: str) -> str:
     ctx.request_context.lifespan_context.testing_account = testing_account
     api = ctx.request_context.lifespan_context.api
-    await api.set_testing_account_knowledge(testing_account)
+    if ctx.request_context.lifespan_context.testing_url:
+        await api.set_testing_account_knowledge(testing_account, ctx.request_context.lifespan_context.testing_url)
+    else:
+        await api.set_testing_account_knowledge(testing_account)
     return prompt.TESTING_ACCOUNT_UPDATED
 
 @mcp.tool(description=prompt.TEST_CREATION_TOOL_DESCRIPTION)
@@ -130,19 +133,19 @@ async def add_e2e_test(ctx: Context,
 @mcp.tool(description=f"{prompt.GOTCHA_KNOWLEDGE_REQUIREMENTS}\n{prompt.KNOWLEDGE_WARNING}")
 async def set_uncommon_ux_designs(ctx: Context, list_of_uncommon_ux_designs: List[str]) -> str:
     api = ctx.request_context.lifespan_context.api
-    await asyncio.gather(*[api.set_uncommon_ux_designs(item) for item in list_of_uncommon_ux_designs])
+    await api.set_uncommon_ux_designs(list_of_uncommon_ux_designs)
     return prompt.KNOWLEDGE_SAVED_RESPONSE
 
 @mcp.tool(description=f"{prompt.USAGE_KNOWLEDGE_REQUIREMENTS}\n{prompt.KNOWLEDGE_WARNING}")
 async def set_basic_user_flows(ctx: Context, list_of_basic_user_flows: List[str]) -> str:
     api = ctx.request_context.lifespan_context.api
-    await asyncio.gather(*[api.set_basic_user_flows(item) for item in list_of_basic_user_flows])
+    await api.set_basic_user_flows(list_of_basic_user_flows)
     return prompt.KNOWLEDGE_SAVED_RESPONSE
 
 @mcp.tool(description=f"{prompt.PREFERENCE_KNOWLEDGE_REQUIREMENTS}\n{prompt.KNOWLEDGE_WARNING}")
 async def set_user_preferences(ctx: Context, list_of_user_preferences: List[str]) -> str:
     api = ctx.request_context.lifespan_context.api
-    await asyncio.gather(*[api.set_user_preferences(item) for item in list_of_user_preferences])
+    await api.set_user_preferences(list_of_user_preferences)
     return prompt.KNOWLEDGE_SAVED_RESPONSE
 
 if __name__ == "__main__":

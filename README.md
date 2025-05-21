@@ -33,9 +33,16 @@ This MCP server enables clients like Cursor to create end-to-end tests using Sta
 
 ### How to use Stably MCP?
 1. If you see a green dot next to the MCP server 'Stably end-to-end testing agent', instead of a red dot or orange dot, then it is correctly installed
+<img width="951" alt="image" src="https://github.com/user-attachments/assets/56d05e47-1b46-4e62-a28b-7703545e0903" />
+
 2. If you encounter any issues, e.g., login expired, try to "refresh" it and it should fix most issues. Otherwise, contact the Stably AI team
+<img width="951" alt="image" src="https://github.com/user-attachments/assets/05e509d4-0505-47d0-b917-9db25d59feb7" />
+
 3. It is recommended to use "Agent" model with "claude-3.7-sonnet" as it is the most tested setting, other settings might also work if you know what you are doing
+<img width="658" alt="image" src="https://github.com/user-attachments/assets/d456ff82-b31d-498b-a407-2ccb5ae267bd" />
+
 4. The Stably MCP works on your default project, if you want it to work with another project, you can switch your project on Stably App and "refresh" the Stably MCP on Cursor
+
 5. Start by asking the AI "how to use Stably MCP?" and you should see it calling "get_user_tutorial" tool, which should then provide you more detailed instructions
 
 ### How does it work?

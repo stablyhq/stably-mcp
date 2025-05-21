@@ -62,8 +62,11 @@ Warning:
 * Don't include any information about development, deployment, or any other details that the daily user would not care about.
 """
 
-KNOWLEDGE_SAVED_RESPONSE = f"""
-Congratulation! Knowledge set! You can now working on the actual testing
+KNOWLEDGE_SAVED_RESPONSE = """
+Congratulation! Knowledge set! {updates} knowledge updates have been made.
+Here's a link where user can review the knowledge: {url}
+You MUST ALWAYS provide a clickable link using markdown to the user so they can review the knowledge.
+For example, show it like this: [Click here to review the knowledge I just set](https://app.stably.ai/project/XXXXXXXXXXX/knowledge?tab=manual)
 """
 
 # Setup

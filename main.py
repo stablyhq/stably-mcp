@@ -2,7 +2,6 @@ from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from fastmcp import FastMCP, Context
-from lib.stably_api import KnowledgeType
 import os
 import asyncio
 from typing import List, Optional
@@ -104,11 +103,11 @@ async def add_e2e_test(ctx: Context,
     api = ctx.request_context.lifespan_context.api
 
     # get existing knowledge
-    existing_knowledge = await asyncio.gather(*[api.retrieve_testing_url_knowledge(), api.retrieve_testing_account_knowledge()])
+    existing_knowledge = await asyncio.gather(*[api.retrieve_testing_urls(), api.retrieve_testing_account_knowledge()])
     # check if testing url is provided 
-    existing_testing_url_knowledge, existing_testing_account_knowledge = existing_knowledge
-    if existing_testing_url_knowledge:
-        url = existing_testing_url_knowledge[-1].content.split(': ')[1].split(',')[0]
+    existing_testing_urls, existing_testing_account_knowledge = existing_knowledge
+    if existing_testing_urls:
+        url = existing_testing_urls[-1]
     elif ctx.request_context.lifespan_context.testing_url:
         url = ctx.request_context.lifespan_context.testing_url
         may_need_a_testing_account = ctx.request_context.lifespan_context.may_need_a_testing_account
@@ -133,20 +132,23 @@ async def add_e2e_test(ctx: Context,
 @mcp.tool(description=f"{prompt.GOTCHA_KNOWLEDGE_REQUIREMENTS}\n{prompt.KNOWLEDGE_WARNING}")
 async def set_uncommon_ux_designs(ctx: Context, list_of_uncommon_ux_designs: List[str]) -> str:
     api = ctx.request_context.lifespan_context.api
-    await api.set_uncommon_ux_designs(list_of_uncommon_ux_designs)
-    return prompt.KNOWLEDGE_SAVED_RESPONSE
+    updated_count = await api.set_uncommon_ux_designs(list_of_uncommon_ux_designs)
+    knowledge_url = await api.get_knowledge_url()
+    return prompt.KNOWLEDGE_SAVED_RESPONSE.format(updates=updated_count, url=knowledge_url)
 
 @mcp.tool(description=f"{prompt.USAGE_KNOWLEDGE_REQUIREMENTS}\n{prompt.KNOWLEDGE_WARNING}")
 async def set_basic_user_flows(ctx: Context, list_of_basic_user_flows: List[str]) -> str:
     api = ctx.request_context.lifespan_context.api
-    await api.set_basic_user_flows(list_of_basic_user_flows)
-    return prompt.KNOWLEDGE_SAVED_RESPONSE
+    updated_count = await api.set_basic_user_flows(list_of_basic_user_flows)
+    knowledge_url = await api.get_knowledge_url()
+    return prompt.KNOWLEDGE_SAVED_RESPONSE.format(updates=updated_count, url=knowledge_url)
 
 @mcp.tool(description=f"{prompt.PREFERENCE_KNOWLEDGE_REQUIREMENTS}\n{prompt.KNOWLEDGE_WARNING}")
 async def set_user_preferences(ctx: Context, list_of_user_preferences: List[str]) -> str:
     api = ctx.request_context.lifespan_context.api
-    await api.set_user_preferences(list_of_user_preferences)
-    return prompt.KNOWLEDGE_SAVED_RESPONSE
+    updated_count = await api.set_user_preferences(list_of_user_preferences)
+    knowledge_url = await api.get_knowledge_url()
+    return prompt.KNOWLEDGE_SAVED_RESPONSE.format(updates=updated_count, url=knowledge_url)
 
 if __name__ == "__main__":
     mcp.run()

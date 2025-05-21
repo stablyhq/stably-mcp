@@ -8,7 +8,7 @@ import logging
 import os
 from enum import Enum
 import asyncio
-
+import re
 
 # Configure logging
 log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
@@ -227,12 +227,12 @@ class StablyAPI:
         })
         return True
 
-    async def set_testing_account_knowledge(self, testing_account_information: str, testing_url: Optional[str] = None) -> bool:
+    async def set_testing_account_knowledge(self, testing_account_information: str, testing_url: Optional[str] = None) -> int:
         url_info = f" for the following url: {testing_url}" if testing_url else ""
         testing_account_knowledge = f"User provided testing account information{url_info}, which could be used for login: {testing_account_information}"
         return await self._set_knowledge([testing_account_knowledge], KnowledgeType.PREFERENCE, ["StablyMCP"])
     
-    async def set_testing_url_knowledge(self, testing_url: str, may_need_a_testing_account: bool) -> bool:
+    async def set_testing_url_knowledge(self, testing_url: str, may_need_a_testing_account: bool) -> int:
         testing_url_knowledge = f"User provided a testing url: {testing_url}, testing this url {'does not' if not may_need_a_testing_account else ''} require a testing account"
         return await self._set_knowledge([testing_url_knowledge], KnowledgeType.PREFERENCE, ["StablyMCP"])
     
@@ -243,19 +243,27 @@ class StablyAPI:
         testing_account_knowledge = await self._query_knowledge(query, 1)
         return testing_account_knowledge
     
-    async def retrieve_testing_url_knowledge(self) -> List[KnowledgeItem]:
-        query = "Recall any information about the testing url"
+    async def retrieve_testing_urls(self) -> List[str]:
+        query = "Recall knowledge about the testing url for this project. Note it has to be a valid testing url, startswith http or https."
         testing_url_knowledge = await self._query_knowledge(query, 3)
-        return testing_url_knowledge
+        urls = []
+        for each in testing_url_knowledge:
+            # use regex to match a url
+            valid_url = re.search(r'https?://\S+', each.content)
+            if valid_url:
+                urls.append(valid_url.group(0))
+        logging.info(f"Retrieved testing url: {urls}")
+        return urls
     
-    async def _set_knowledge(self, knowledge_contents: List[str], type: KnowledgeType, hashtag: List[str]) -> bool:
-        knowledge_contents = []
+    async def _set_knowledge(self, knowledge_contents: List[str], type: KnowledgeType, hashtag: List[str]) -> int:
+        processed_knowledge_contents = []
+        logger.info(f"Setting knowledge of type {type} with contents {knowledge_contents}")
         for each in knowledge_contents:
             single_knowledge = f"[{type.value}] {each}"
             if hashtag:
                 single_knowledge += f" #{'#'.join(hashtag)}"
-            knowledge_contents.append(single_knowledge)
-        knowledge = '\n'.join(knowledge_contents)
+            processed_knowledge_contents.append(single_knowledge)
+        knowledge = '\n'.join(processed_knowledge_contents)
         duplicate_query = f"Retrieve all knowledge items that are duplicates to the following knowledge: {knowledge}"
         conflict_query = f"Retrieve all knowledge items that are conflicting with the following knowledge: {knowledge}"
 
@@ -264,20 +272,26 @@ class StablyAPI:
             self._query_knowledge(conflict_query)
         )
         knowledge_to_delete = set([item.id for item in conflict_knowledge + duplicate_knowledge])
+        logger.info(f"Deleting {len(knowledge_to_delete)} knowledge items...")
+        logger.info(f"Creating {len(processed_knowledge_contents)} knowledge items...")
         delete_tasks = [self._delete_knowledge(item_id) for item_id in knowledge_to_delete]
-        create_tasks = [self._create_knowledge(each) for each in knowledge_contents]
+        create_tasks = [self._create_knowledge(each) for each in processed_knowledge_contents]
         await asyncio.gather(*delete_tasks, *create_tasks)
-        return True
+        return len(delete_tasks) + len(create_tasks)
     
-    async def set_uncommon_ux_designs(self, list_of_uncommon_ux_designs: List[str]) -> bool:
+    async def set_uncommon_ux_designs(self, list_of_uncommon_ux_designs: List[str]) -> int:
         return await self._set_knowledge(list_of_uncommon_ux_designs, KnowledgeType.GOTCHA, ["StablyMCP"])
     
-    async def set_basic_user_flows(self, list_of_basic_user_flows: List[str]) -> bool:
+    async def set_basic_user_flows(self, list_of_basic_user_flows: List[str]) -> int:
         return await self._set_knowledge(list_of_basic_user_flows, KnowledgeType.USAGE, ["StablyMCP"])
     
-    async def set_user_preferences(self, list_of_user_preferences: List[str]) -> bool:
+    async def set_user_preferences(self, list_of_user_preferences: List[str]) -> int:
         return await self._set_knowledge(list_of_user_preferences, KnowledgeType.PREFERENCE, ["StablyMCP"])
      
+    async def get_knowledge_url(self) -> str:
+        project_id = await self.get_or_set_project_id()
+        return f"{self.DOMAIN}/project/{project_id}/knowledge?tab=manual"
+    
     async def add_e2e_test(self, url: str, prompt: str, publish: bool = False) -> str:
         project_id = await self.get_or_set_project_id()
         # 1. create a new test draft
@@ -296,6 +310,6 @@ class StablyAPI:
             # prepare the test
             test_url = f"{self.DOMAIN}/project/{project_id}/test/{published_test.testId}"
         else:
-           # prepare the test
+            # prepare the test
             test_url = f"{self.DOMAIN}/project/{project_id}/testDraft/{test_draft.id}"
         return test_url

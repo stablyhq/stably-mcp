@@ -108,7 +108,7 @@ async def add_e2e_test(ctx: Context,
     # check if testing url is provided 
     existing_testing_url_knowledge, existing_testing_account_knowledge = existing_knowledge
     if existing_testing_url_knowledge:
-        url = existing_testing_url_knowledge[-1]['knowledge_content'].split(': ')[1].split(',')[0]
+        url = existing_testing_url_knowledge[-1].content.split(': ')[1].split(',')[0]
     elif ctx.request_context.lifespan_context.testing_url:
         url = ctx.request_context.lifespan_context.testing_url
         may_need_a_testing_account = ctx.request_context.lifespan_context.may_need_a_testing_account

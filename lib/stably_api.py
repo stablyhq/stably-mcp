@@ -8,6 +8,8 @@ import logging
 import os
 from enum import Enum
 import asyncio
+
+
 # Configure logging
 log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
 os.makedirs(log_dir, exist_ok=True)
@@ -25,6 +27,10 @@ class CreateTestDraftResponse(BaseModel):
 
 class PublishTestDraftResponse(BaseModel):
     testId: str
+
+class KnowledgeItem(BaseModel):
+    id: str
+    content: str
 
 class KnowledgeType(Enum):
     GOTCHA = "Uncommon UX Design"
@@ -67,7 +73,7 @@ class StablyAPI:
             async with session.get(full_url, headers=headers) as response:
                 response.raise_for_status()
                 json_response = await response.json()
-                logger.info(f"Response: {json_response}")
+                logger.info(f"Query Response: {json_response}")
                 return json_response
     
     async def __call_trpc_mutation(self, endpoint: str, args: dict) -> dict:
@@ -87,6 +93,7 @@ class StablyAPI:
             async with session.post(url, json=payload, headers=headers) as response:
                 response.raise_for_status()
                 json_response = await response.json()
+                logger.info(f"Mutation Response: {json_response}")
                 return json_response
             
     async def _get_default_project_id(self) -> str:
@@ -95,25 +102,25 @@ class StablyAPI:
         })
         return response[0]['result']['data']['json']['id']
     
-    async def _list_knowledge(self) -> List[str]:
+    async def _list_knowledge(self) -> List[KnowledgeItem]:
         project_id = await self.get_or_set_project_id()
         response = await self.__call_trpc_query("knowledge.list", {
             "projectId": project_id,
         })
         obj = response[0]['result']['data']['json']
-        return [{"knowledge_content":item['content'], "created_at":item['createdAt'], "updated_at":item['updatedAt']} for item in obj]
+        return [KnowledgeItem(**item) for item in obj]
  
-    async def _create_knowledge(self, knowledge_item: str) -> str:
+    async def _create_knowledge(self, knowledge_content: str) -> bool:
         project_id = await self.get_or_set_project_id()
         existing_knowledge = await self._list_knowledge()
         # check if the knowledge item already exists
-        if any(item['knowledge_content'] == knowledge_item for item in existing_knowledge):
+        if any(item.content == knowledge_content for item in existing_knowledge):
             return True
         new_index = len(existing_knowledge)
         logger.info(f"Creating knowledge item with index {new_index}")
         await self.__call_trpc_mutation("knowledge.createManualKnowledge", {
             "projectId": project_id,
-            "content": knowledge_item,
+            "content": knowledge_content,
             "order": new_index,
         })
         return True
@@ -135,7 +142,7 @@ class StablyAPI:
         })
         return True
     
-    async def _query_knowledge(self, query: str, top_k: Optional[int] = None) -> str:
+    async def _query_knowledge(self, query: str, top_k: Optional[int] = None) -> List[KnowledgeItem]:
         project_id = await self.get_or_set_project_id()
         params = {
             "query": query,
@@ -144,7 +151,8 @@ class StablyAPI:
         if top_k:
             params["topK"] = top_k
         response = await self.__call_trpc_mutation("knowledge.query", params)
-        return response[0]['result']['data']['json']
+        obj = response[0]['result']['data']['json']
+        return [KnowledgeItem(**item) for item in obj]
     
     async def _create_test_draft(self, url: str) -> CreateTestDraftResponse:
         project_id = await self.get_or_set_project_id()
@@ -219,35 +227,35 @@ class StablyAPI:
         })
         return True
 
-    async def set_testing_account_knowledge(self, testing_account_information: str, testing_url: Optional[str] = None) -> str:
+    async def set_testing_account_knowledge(self, testing_account_information: str, testing_url: Optional[str] = None) -> bool:
         url_info = f" for the following url: {testing_url}" if testing_url else ""
         testing_account_knowledge = f"User provided testing account information{url_info}, which could be used for login: {testing_account_information}"
-        return await self._set_knowledge([testing_account_knowledge], KnowledgeType.PREFERENCE, ["CursorMCP"])
+        return await self._set_knowledge([testing_account_knowledge], KnowledgeType.PREFERENCE, ["StablyMCP"])
     
-    async def set_testing_url_knowledge(self, testing_url: str, may_need_a_testing_account: bool) -> str:
+    async def set_testing_url_knowledge(self, testing_url: str, may_need_a_testing_account: bool) -> bool:
         testing_url_knowledge = f"User provided a testing url: {testing_url}, testing this url {'does not' if not may_need_a_testing_account else ''} require a testing account"
-        return await self._set_knowledge([testing_url_knowledge], KnowledgeType.PREFERENCE, ["CursorMCP"])
+        return await self._set_knowledge([testing_url_knowledge], KnowledgeType.PREFERENCE, ["StablyMCP"])
     
-    async def retrieve_testing_account_knowledge(self, testing_url: Optional[str] = None) -> List:
+    async def retrieve_testing_account_knowledge(self, testing_url: Optional[str] = None) -> List[KnowledgeItem]:
         query = "Recall any information about the testing account"
         if testing_url:
             query += f" for the following url: {testing_url}"
         testing_account_knowledge = await self._query_knowledge(query, 1)
-        return sorted(testing_account_knowledge, key=lambda x: x['updated_at'])
+        return testing_account_knowledge
     
-    async def retrieve_testing_url_knowledge(self) -> List:
+    async def retrieve_testing_url_knowledge(self) -> List[KnowledgeItem]:
         query = "Recall any information about the testing url"
         testing_url_knowledge = await self._query_knowledge(query, 3)
-        return sorted(testing_url_knowledge, key=lambda x: x['updated_at'])
+        return testing_url_knowledge
     
-    async def _set_knowledge(self, knowledge_contents: List[str], type: KnowledgeType, hashtag: List[str]) -> str:
-        knowledge_items = []
+    async def _set_knowledge(self, knowledge_contents: List[str], type: KnowledgeType, hashtag: List[str]) -> bool:
+        knowledge_contents = []
         for each in knowledge_contents:
-            knowledge_item = f"[{type.value}] {each}"
+            single_knowledge = f"[{type.value}] {each}"
             if hashtag:
-                knowledge_item += f" #{'#'.join(hashtag)}"
-            knowledge_items.append(knowledge_item)
-        knowledge = '\n'.join(knowledge_items)
+                single_knowledge += f" #{'#'.join(hashtag)}"
+            knowledge_contents.append(single_knowledge)
+        knowledge = '\n'.join(knowledge_contents)
         duplicate_query = f"Retrieve all knowledge items that are duplicates to the following knowledge: {knowledge}"
         conflict_query = f"Retrieve all knowledge items that are conflicting with the following knowledge: {knowledge}"
 
@@ -255,21 +263,22 @@ class StablyAPI:
             self._query_knowledge(duplicate_query),
             self._query_knowledge(conflict_query)
         )
-        delete_tasks = [self._delete_knowledge(each['id']) for each in conflict_knowledge + duplicate_knowledge]
-        create_tasks = [self._create_knowledge(each) for each in knowledge_items]
+        knowledge_to_delete = set([item.id for item in conflict_knowledge + duplicate_knowledge])
+        delete_tasks = [self._delete_knowledge(item_id) for item_id in knowledge_to_delete]
+        create_tasks = [self._create_knowledge(each) for each in knowledge_contents]
         await asyncio.gather(*delete_tasks, *create_tasks)
         return True
     
-    async def set_uncommon_ux_designs(self, list_of_uncommon_ux_designs: List[str]) -> str:
-        return await self._set_knowledge(list_of_uncommon_ux_designs, KnowledgeType.GOTCHA, ["CursorMCP"])
+    async def set_uncommon_ux_designs(self, list_of_uncommon_ux_designs: List[str]) -> bool:
+        return await self._set_knowledge(list_of_uncommon_ux_designs, KnowledgeType.GOTCHA, ["StablyMCP"])
     
-    async def set_basic_user_flows(self, list_of_basic_user_flows: List[str]) -> str:
-        return await self._set_knowledge(list_of_basic_user_flows, KnowledgeType.USAGE, ["CursorMCP"])
+    async def set_basic_user_flows(self, list_of_basic_user_flows: List[str]) -> bool:
+        return await self._set_knowledge(list_of_basic_user_flows, KnowledgeType.USAGE, ["StablyMCP"])
     
-    async def set_user_preferences(self, list_of_user_preferences: List[str]) -> str:
-        return await self._set_knowledge(list_of_user_preferences, KnowledgeType.PREFERENCE, ["CursorMCP"])
+    async def set_user_preferences(self, list_of_user_preferences: List[str]) -> bool:
+        return await self._set_knowledge(list_of_user_preferences, KnowledgeType.PREFERENCE, ["StablyMCP"])
      
-    async def add_e2e_test(self, url: str, prompt: str, publish: bool = False):
+    async def add_e2e_test(self, url: str, prompt: str, publish: bool = False) -> str:
         project_id = await self.get_or_set_project_id()
         # 1. create a new test draft
         test_draft = await self._create_test_draft(url)

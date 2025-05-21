@@ -31,6 +31,13 @@ This MCP server enables clients like Cursor to create end-to-end tests using Sta
 }
 ```
 
+### How to use Stably MCP?
+1. If you see a green dot next to the MCP server 'Stably end-to-end testing agent', instead of a red dot or orange dot, then it is correctly installed
+2. If you encounter any issues, e.g., login expired, try to "refresh" it and it should fix most issues. Otherwise, contact the Stably AI team
+3. It is recommended to use "Agent" model with "claude-3.7-sonnet" as it is the most tested setting, other settings might also work if you know what you are doing
+4. The Stably MCP works on your default project, if you want it to work with another project, you can switch your project on Stably App and "refresh" the Stably MCP on Cursor
+5. Start by asking the AI "how to use Stably MCP?" and you should see it calling "get_user_tutorial" tool, which should then provide you more detailed instructions
+
 ### How does it work?
 
 The Stably MCP server provides a bridge between an MCP client (e.g., Cursor) and Stably's testing platform:
@@ -52,11 +59,11 @@ The Stably MCP server provides a bridge between an MCP client (e.g., Cursor) and
 
 Current known limitations include:
 
-1. **Local Development Testing**: When testing local apps from remote server, proper tunneling is required. One experimental feature is to use to set the `NGROK_ENABLED=true` and `NGROK_AUTH_TOKEN` environment variables if testing against localhost. But this feature is highly unstable and not tested, and therefore not recommended.
+1. **Local Development Testing**: When testing local apps from remote server, proper tunneling is required. One experimental feature is to set the `NGROK_ENABLED=true` and `NGROK_AUTH_TOKEN` environment variables if testing against localhost. But this feature is highly unstable and not tested, and therefore not recommended.
 
-2. **Test Step Generation**: The quality of generated test steps depends on the codebase context and the clarity of test descriptions. It will not know dynamic context such as A/B tests with dynamic feature flags. Also, be specific when describing test scenarios but do not force AI to be overly specific, otherwise the test might be flaky.
+2. **No access to runtime execution**: The quality of generated test steps depends on the codebase context and the clarity of test descriptions. It will not know dynamic context such as A/B tests with dynamic feature flags. 
 
-3. **Authentication**: For applications requiring login, you'll need to provide testing account credentials using the appropriate MCP functions.
+3. **Context Limit**: Currently AI is still constrained by context length and sometimes a little bit "lazy" and does not want to explore everything if you simply say a high level prompt like "explore the codebase and build knowledge base for every useful detail", or if you want to "create 20 QA tests for my codebase" in a single request, it will also not provide you high quality results. It works better if you have more specific things in mind and the AI has fewer things to digest and generate.
 
 4. **TBD**: more limitations may be added later
 
